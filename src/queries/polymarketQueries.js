@@ -1,109 +1,142 @@
 import { gql } from '@apollo/client';
 
-export const GET_GLOBAL_STATS = gql`
-  query GetGlobalStats {
-    global(id: "") {
-      numConditions
-      numOpenConditions
-      numClosedConditions
-      numTraders
-      tradesQuantity
-      scaledCollateralVolume
-      scaledCollateralFees
-    }
-  }
-`;
-
+// Top traders query
 export const GET_TOP_TRADERS = gql`
-  query GetTopTraders {
-    accounts(first: 10, orderBy: scaledCollateralVolume, orderDirection: desc) {
+  query GetTopTraders($first: Int!, $orderBy: String!, $orderDirection: String!) {
+    accounts(
+      first: $first
+      orderBy: $orderBy
+      orderDirection: $orderDirection
+      where: { totalVolume_gt: "1000000" }
+    ) {
       id
-      scaledCollateralVolume
-      scaledProfit
-      numTrades
-      creationTimestamp
-      lastTradedTimestamp
-    }
-  }
-`;
-
-export const GET_RECENT_TRADES = gql`
-  query GetRecentTrades {
-    transactions(first: 20, orderBy: timestamp, orderDirection: desc) {
-      id
-      timestamp
-      type
-      user {
+      totalVolume
+      totalProfit
+      totalLoss
+      netProfit
+      tradesCount
+      lastTradeTimestamp
+      positions {
         id
-      }
-      market {
-        id
-      }
-      tradeAmount
-      outcomeTokensAmount
-      outcomeIndex
-    }
-  }
-`;
-
-export const GET_MARKET_CONDITIONS = gql`
-  query GetMarketConditions {
-    conditions(first: 10, where: {resolutionTimestamp: null}) {
-      id
-      outcomeSlotCount
-      fixedProductMarketMakers {
-        id
-        scaledCollateralVolume
-        outcomeTokenPrices
-        lastActiveDay
-        tradesQuantity
+        outcome
+        shares
+        averagePrice
       }
     }
   }
 `;
 
+// Market data query
+export const GET_MARKETS = gql`
+  query GetMarkets($first: Int!, $orderBy: String!, $orderDirection: String!) {
+    conditions(
+      first: $first
+      orderBy: $orderBy
+      orderDirection: $orderDirection
+      where: { resolved: false }
+    ) {
+      id
+      question
+      volume
+      liquidity
+      outcomes
+      prices
+      tradesCount
+      lastTradeTimestamp
+      marketMaker {
+        id
+        totalVolume
+      }
+    }
+  }
+`;
+
+// Order flow query
 export const GET_ORDER_FLOW = gql`
-  query GetOrderFlow($timestamp: BigInt!) {
-    transactions(
-      first: 100
-      where: {timestamp_gte: $timestamp}
+  query GetOrderFlow($first: Int!, $startTime: BigInt!) {
+    orderFilleds(
+      first: $first
       orderBy: timestamp
       orderDirection: desc
+      where: { timestamp_gte: $startTime }
     ) {
       id
-      type
       timestamp
-      tradeAmount
-      outcomeTokensAmount
-      user {
+      maker
+      taker
+      makerAssetId
+      takerAssetId
+      makerAmountFilled
+      takerAmountFilled
+      price
+      isBuy
+      condition {
         id
+        question
       }
     }
   }
 `;
 
-export const GET_WHALE_ACTIVITY = gql`
-  query GetWhaleActivity {
-    transactions(
-      first: 20
-      where: {tradeAmount_gte: "100000000000"}
-      orderBy: timestamp
+// Account details query
+export const GET_ACCOUNT_DETAILS = gql`
+  query GetAccountDetails($accountId: ID!) {
+    account(id: $accountId) {
+      id
+      totalVolume
+      totalProfit
+      totalLoss
+      netProfit
+      tradesCount
+      firstTradeTimestamp
+      lastTradeTimestamp
+      positions {
+        id
+        condition {
+          id
+          question
+        }
+        outcome
+        shares
+        averagePrice
+        realizedProfit
+        unrealizedProfit
+      }
+      trades(first: 100, orderBy: timestamp, orderDirection: desc) {
+        id
+        timestamp
+        price
+        amount
+        isBuy
+        condition {
+          id
+          question
+        }
+      }
+    }
+  }
+`;
+
+// Market inefficiency query
+export const GET_MARKET_INEFFICIENCIES = gql`
+  query GetMarketInefficiencies($spreadThreshold: BigDecimal!) {
+    conditions(
+      where: { 
+        resolved: false,
+        spread_gt: $spreadThreshold
+      }
+      orderBy: spread
       orderDirection: desc
+      first: 20
     ) {
       id
-      type
-      timestamp
-      market {
-        id
-      }
-      user {
-        id
-        scaledProfit
-      }
-      tradeAmount
-      feeAmount
-      outcomeIndex
-      outcomeTokensAmount
+      question
+      bestBid
+      bestAsk
+      spread
+      volume
+      liquidity
+      lastTradeTimestamp
     }
   }
 `;
