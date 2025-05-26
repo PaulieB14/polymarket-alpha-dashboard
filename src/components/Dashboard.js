@@ -1,58 +1,139 @@
-import React, { useState } from 'react';
-import { LineChart, Line, AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis } from 'recharts';
-import { TrendingUp, TrendingDown, Activity, DollarSign, Users, Brain, AlertTriangle, Zap, Target, Eye } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis } from 'recharts';
+import { TrendingUp, Activity, DollarSign, Brain, AlertTriangle, Zap, Target, Eye } from 'lucide-react';
 import { useQuery } from '@apollo/client';
-import { GET_GLOBAL_STATS, GET_TOP_TRADERS, GET_RECENT_TRADES } from '../queries/polymarketQueries';
+import { GET_GLOBAL_STATS, GET_TOP_TRADERS, GET_RECENT_TRADES, GET_ORDER_FLOW, GET_MARKET_CONDITIONS, GET_WHALE_ACTIVITY } from '../queries/polymarketQueries';
 
 const Dashboard = () => {
   const [activeTab, setActiveTab] = useState('smartMoney');
   const [selectedTimeframe, setSelectedTimeframe] = useState('24h');
-  const [selectedMarket, setSelectedMarket] = useState(null);
   
-  // GraphQL queries
-  const { loading: globalLoading, error: globalError, data: globalData } = useQuery(GET_GLOBAL_STATS);
-  const { loading: tradersLoading, error: tradersError, data: tradersData } = useQuery(GET_TOP_TRADERS);
-  const { loading: tradesLoading, error: tradesError, data: tradesData } = useQuery(GET_RECENT_TRADES);
+  // Calculate timestamp for order flow query based on selected timeframe
+  const getTimestampForTimeframe = () => {
+    const now = Math.floor(Date.now() / 1000);
+    switch (selectedTimeframe) {
+      case '1h': return now - 3600;
+      case '7d': return now - 604800;
+      case '30d': return now - 2592000;
+      case '24h':
+      default: return now - 86400;
+    }
+  };
+  
+  // GraphQL queries with error handling
+  const { loading: globalLoading, data: globalData, refetch: refetchGlobal } = 
+    useQuery(GET_GLOBAL_STATS, { notifyOnNetworkStatusChange: true });
+    
+  const { loading: tradersLoading, data: tradersData, refetch: refetchTraders } = 
+    useQuery(GET_TOP_TRADERS, { notifyOnNetworkStatusChange: true });
+    
+  const { loading: tradesLoading, data: tradesData, refetch: refetchTrades } = 
+    useQuery(GET_RECENT_TRADES, { notifyOnNetworkStatusChange: true });
+    
+  const { data: orderFlowData, refetch: refetchOrderFlow } = 
+    useQuery(GET_ORDER_FLOW, { 
+      variables: { timestamp: getTimestampForTimeframe().toString() },
+      notifyOnNetworkStatusChange: true,
+      skip: activeTab !== 'orderFlow'
+    });
+    
+  const { data: marketsData, refetch: refetchMarkets } = 
+    useQuery(GET_MARKET_CONDITIONS, { 
+      notifyOnNetworkStatusChange: true,
+      skip: activeTab !== 'heatmap'
+    });
+    
+  const { data: whaleData, refetch: refetchWhale } = 
+    useQuery(GET_WHALE_ACTIVITY, { 
+      notifyOnNetworkStatusChange: true,
+      skip: activeTab !== 'smartMoney'
+    });
+  
+  
+  // Refresh data when timeframe changes
+  useEffect(() => {
+    if (activeTab === 'orderFlow') {
+      refetchOrderFlow({ timestamp: getTimestampForTimeframe().toString() });
+    }
+  }, [selectedTimeframe, activeTab, refetchOrderFlow, getTimestampForTimeframe]);
+  
+  // Calculate win rate for traders using real data
+  const calculateWinRate = (trader) => {
+    if (!trader.numTrades || trader.numTrades === 0) return null;
+    // Use trader.winCount if available, otherwise don't calculate
+    return trader.winCount ? Math.round((trader.winCount / trader.numTrades) * 100) : null;
+  };
+  
+  // Format timestamp to readable date
+  const formatTimestamp = (timestamp) => {
+    if (!timestamp) return '';
+    const date = new Date(parseInt(timestamp) * 1000);
+    return date.toLocaleString();
+  };
 
-  // Simulated data - will be replaced with real data from queries
-  const smartMoneyData = tradersData?.accounts || [
-    { id: '0x4bfb...982e', scaledCollateralVolume: 2145821969, scaledProfit: 45300000, numTrades: 342 },
-    { id: '0xc5d5...f80a', scaledCollateralVolume: 5394853900, scaledProfit: 123000000, numTrades: 521 },
-    { id: '0xd218...b5c9', scaledCollateralVolume: 174758983, scaledProfit: -13797330, numTrades: 89 },
-    { id: '0x5bff...ffbe', scaledCollateralVolume: 158016200, scaledProfit: -6335658, numTrades: 134 },
-    { id: '0x9d84...1344', scaledCollateralVolume: 135540546, scaledProfit: -6616914, numTrades: 201 }
-  ];
+  // Process data from GraphQL queries - no fallback to mock data
+  const smartMoneyData = tradersData?.accounts?.map(trader => ({
+    ...trader,
+    winRate: calculateWinRate(trader)
+  })) || [];
 
-  const orderFlowData = [
-    { time: '00:00', buys: 4200000, sells: 3800000, netFlow: 400000 },
-    { time: '04:00', buys: 3500000, sells: 4100000, netFlow: -600000 },
-    { time: '08:00', buys: 5200000, sells: 4800000, netFlow: 400000 },
-    { time: '12:00', buys: 6800000, sells: 5200000, netFlow: 1600000 },
-    { time: '16:00', buys: 7200000, sells: 6800000, netFlow: 400000 },
-    { time: '20:00', buys: 5800000, sells: 5400000, netFlow: 400000 }
-  ];
+  // Process order flow data from GraphQL query - no fallback to mock data
+  const orderFlowChartData = orderFlowData?.transactions ? 
+    // Group transactions by hour and calculate buys/sells
+    Array.from(Array(6).keys()).map(hour => {
+      const hourTransactions = orderFlowData.transactions.filter(tx => {
+        const txDate = new Date(parseInt(tx.timestamp) * 1000);
+        return Math.floor(txDate.getHours() / 4) === hour;
+      });
+      
+      const buys = hourTransactions
+        .filter(tx => tx.type === 'Buy')
+        .reduce((sum, tx) => sum + parseInt(tx.tradeAmount || 0), 0);
+        
+      const sells = hourTransactions
+        .filter(tx => tx.type === 'Sell')
+        .reduce((sum, tx) => sum + parseInt(tx.tradeAmount || 0), 0);
+        
+      return {
+        time: `${(hour * 4).toString().padStart(2, '0')}:00`,
+        buys,
+        sells,
+        netFlow: buys - sells
+      };
+    }) : [];
 
-  const marketHeatmapData = [
-    { name: 'Presidential Election', volume: 45000000, change: 15.2, activity: 95, momentum: 'bullish' },
-    { name: 'Fed Rate Decision', volume: 23000000, change: -8.5, activity: 78, momentum: 'bearish' },
-    { name: 'Bitcoin Price EOY', volume: 18000000, change: 22.1, activity: 82, momentum: 'bullish' },
-    { name: 'AI Regulation', volume: 12000000, change: 5.3, activity: 65, momentum: 'neutral' },
-    { name: 'Climate Policy', volume: 8000000, change: -12.3, activity: 45, momentum: 'bearish' }
-  ];
+  // Process market data from GraphQL query - no fallback to mock data
+  const processedMarketData = marketsData?.markets ? 
+    marketsData.markets.map(market => {
+      const volume = market.volume || 0;
+      const change = market.change24h || 0;
+      const activity = market.activity || 0;
+      const momentum = change > 10 ? 'bullish' : change < -10 ? 'bearish' : 'neutral';
+      
+      return {
+        id: market.id,
+        name: market.name || `Market #${market.id.substring(0, 6)}`,
+        volume: parseInt(volume),
+        change,
+        activity,
+        momentum
+      };
+    }).slice(0, 5) : [];
 
-  const inefficiencyAlerts = [
-    { id: 1, type: 'spread', market: 'Presidential Election', opportunity: 'Wide spread detected', value: '2.3%', severity: 'high' },
-    { id: 2, type: 'arbitrage', market: 'Fed Rate Decision', opportunity: 'Cross-market arbitrage', value: '1.8%', severity: 'medium' },
-    { id: 3, type: 'liquidity', market: 'Bitcoin Price EOY', opportunity: 'Liquidity imbalance', value: '$450K', severity: 'low' },
-    { id: 4, type: 'momentum', market: 'AI Regulation', opportunity: 'Momentum divergence', value: '15 min', severity: 'high' }
-  ];
+  // Get inefficiency alerts from GraphQL query - no fallback to mock data
+  const generatedAlerts = marketsData?.alerts || [];
 
-  const whaleActivity = tradesData?.enrichedOrderFilleds || [
-    { timestamp: '2024-01-25 14:32', maker: { id: '0x4bfb...982e' }, side: 'Buy', market: { id: '1' }, size: 1200000, price: 0.62 },
-    { timestamp: '2024-01-25 14:28', taker: { id: '0xc5d5...f80a' }, side: 'Sell', market: { id: '2' }, size: 800000, price: 0.71 },
-    { timestamp: '2024-01-25 14:15', maker: { id: '0x9d84...1344' }, side: 'Buy', market: { id: '3' }, size: 500000, price: 0.44 },
-    { timestamp: '2024-01-25 13:58', taker: { id: '0xd218...b5c9' }, side: 'Sell', market: { id: '4' }, size: 350000, price: 0.58 }
-  ];
+  // Process whale activity from GraphQL query - no fallback to mock data
+  const processedWhaleActivity = tradesData?.enrichedOrderFilleds ? 
+    tradesData.enrichedOrderFilleds.map(trade => ({
+      timestamp: formatTimestamp(trade.timestamp),
+      maker: trade.maker,
+      taker: trade.taker,
+      side: trade.side,
+      market: trade.market,
+      size: trade.size ? parseInt(trade.size) : null,
+      price: trade.price ? parseFloat(trade.price) : null
+    })).filter(trade => trade.side && trade.size && trade.price) : [];
 
   const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#6366f1'];
 
@@ -69,7 +150,7 @@ const Dashboard = () => {
 
   const formatAddress = (address) => {
     if (!address) return '';
-    return `${address.slice(0, 6)}...${address.slice(-4)}`;
+    return address; // Show full wallet address
   };
 
   if (globalLoading || tradersLoading || tradesLoading) {
@@ -185,7 +266,7 @@ const Dashboard = () => {
                 Recent Whale Activity
               </h2>
               <div className="space-y-3">
-                {whaleActivity.map((activity, index) => (
+                {processedWhaleActivity.map((activity, index) => (
                   <div key={index} className="bg-gray-800 rounded-lg p-3 text-sm">
                     <div className="flex justify-between items-start mb-1">
                       <p className={`font-semibold ${activity.side === 'Buy' ? 'text-green-400' : 'text-red-400'}`}>
@@ -214,7 +295,7 @@ const Dashboard = () => {
                 Order Flow Imbalance
               </h2>
               <ResponsiveContainer width="100%" height={300}>
-                <AreaChart data={orderFlowData}>
+                <AreaChart data={orderFlowChartData}>
                   <defs>
                     <linearGradient id="buyGradient" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="5%" stopColor="#10b981" stopOpacity={0.8}/>
@@ -241,7 +322,7 @@ const Dashboard = () => {
               <div className="mt-6">
                 <h3 className="text-lg font-semibold mb-3">Net Flow Analysis</h3>
                 <ResponsiveContainer width="100%" height={150}>
-                  <BarChart data={orderFlowData}>
+                  <BarChart data={orderFlowChartData}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
                     <XAxis dataKey="time" stroke="#9ca3af" />
                     <YAxis stroke="#9ca3af" tickFormatter={(value) => formatCurrency(value)} />
@@ -262,26 +343,34 @@ const Dashboard = () => {
                 Flow Metrics
               </h2>
               <div className="space-y-4">
-                <div className="bg-gray-800 rounded-lg p-4">
-                  <p className="text-gray-400 text-sm mb-1">24h Buy Volume</p>
-                  <p className="text-2xl font-bold text-green-400">$32.8M</p>
-                  <p className="text-xs text-gray-500 mt-1">+12.3% from avg</p>
-                </div>
-                <div className="bg-gray-800 rounded-lg p-4">
-                  <p className="text-gray-400 text-sm mb-1">24h Sell Volume</p>
-                  <p className="text-2xl font-bold text-red-400">$28.6M</p>
-                  <p className="text-xs text-gray-500 mt-1">-5.2% from avg</p>
-                </div>
-                <div className="bg-gray-800 rounded-lg p-4">
-                  <p className="text-gray-400 text-sm mb-1">Buy/Sell Ratio</p>
-                  <p className="text-2xl font-bold text-blue-400">1.15</p>
-                  <p className="text-xs text-gray-500 mt-1">Bullish sentiment</p>
-                </div>
-                <div className="bg-gray-800 rounded-lg p-4">
-                  <p className="text-gray-400 text-sm mb-1">Large Order %</p>
-                  <p className="text-2xl font-bold text-purple-400">23.5%</p>
-                  <p className="text-xs text-gray-500 mt-1">Smart money active</p>
-                </div>
+                {orderFlowData?.metrics ? (
+                  <>
+                    <div className="bg-gray-800 rounded-lg p-4">
+                      <p className="text-gray-400 text-sm mb-1">24h Buy Volume</p>
+                      <p className="text-2xl font-bold text-green-400">{formatCurrency(orderFlowData.metrics.buyVolume || 0)}</p>
+                      <p className="text-xs text-gray-500 mt-1">{orderFlowData.metrics.buyVolumeChange > 0 ? '+' : ''}{orderFlowData.metrics.buyVolumeChange || 0}% from avg</p>
+                    </div>
+                    <div className="bg-gray-800 rounded-lg p-4">
+                      <p className="text-gray-400 text-sm mb-1">24h Sell Volume</p>
+                      <p className="text-2xl font-bold text-red-400">{formatCurrency(orderFlowData.metrics.sellVolume || 0)}</p>
+                      <p className="text-xs text-gray-500 mt-1">{orderFlowData.metrics.sellVolumeChange > 0 ? '+' : ''}{orderFlowData.metrics.sellVolumeChange || 0}% from avg</p>
+                    </div>
+                    <div className="bg-gray-800 rounded-lg p-4">
+                      <p className="text-gray-400 text-sm mb-1">Buy/Sell Ratio</p>
+                      <p className="text-2xl font-bold text-blue-400">{orderFlowData.metrics.buySellRatio || 0}</p>
+                      <p className="text-xs text-gray-500 mt-1">{parseFloat(orderFlowData.metrics.buySellRatio || 0) > 1 ? 'Bullish' : 'Bearish'} sentiment</p>
+                    </div>
+                    <div className="bg-gray-800 rounded-lg p-4">
+                      <p className="text-gray-400 text-sm mb-1">Large Order %</p>
+                      <p className="text-2xl font-bold text-purple-400">{orderFlowData.metrics.largeOrderPercentage || 0}%</p>
+                      <p className="text-xs text-gray-500 mt-1">Smart money active</p>
+                    </div>
+                  </>
+                ) : (
+                  <div className="text-center py-8 text-gray-500">
+                    <p>No flow metrics data available</p>
+                  </div>
+                )}
               </div>
             </div>
           </>
@@ -296,7 +385,7 @@ const Dashboard = () => {
                 Market Activity Heatmap
               </h2>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {marketHeatmapData.map((market, index) => {
+                {processedMarketData.map((market, index) => {
                   const heatIntensity = market.activity / 100;
                   const bgColor = market.momentum === 'bullish' ? 'rgba(16, 185, 129,' : 
                                   market.momentum === 'bearish' ? 'rgba(239, 68, 68,' : 
@@ -356,7 +445,7 @@ const Dashboard = () => {
                   <ResponsiveContainer width="100%" height={250}>
                     <PieChart>
                       <Pie
-                        data={marketHeatmapData}
+                        data={processedMarketData}
                         cx="50%"
                         cy="50%"
                         outerRadius={80}
@@ -364,7 +453,7 @@ const Dashboard = () => {
                         dataKey="volume"
                         label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
                       >
-                        {marketHeatmapData.map((entry, index) => (
+                        {processedMarketData.map((entry, index) => (
                           <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                         ))}
                       </Pie>
@@ -376,7 +465,7 @@ const Dashboard = () => {
                 <div>
                   <h3 className="text-lg font-semibold mb-4">Market Momentum</h3>
                   <ResponsiveContainer width="100%" height={250}>
-                    <RadarChart data={marketHeatmapData}>
+                    <RadarChart data={processedMarketData}>
                       <PolarGrid stroke="#374151" />
                       <PolarAngleAxis dataKey="name" stroke="#9ca3af" />
                       <PolarRadiusAxis stroke="#9ca3af" />
@@ -399,7 +488,7 @@ const Dashboard = () => {
                 Inefficiency Alerts
               </h2>
               <div className="space-y-4">
-                {inefficiencyAlerts.map((alert) => (
+                {generatedAlerts.map((alert) => (
                   <div
                     key={alert.id}
                     className={`bg-gray-800 rounded-lg p-4 border-l-4 ${
@@ -429,24 +518,30 @@ const Dashboard = () => {
               </div>
 
               {/* Alert Statistics */}
-              <div className="mt-8 grid grid-cols-1 md:grid-cols-4 gap-4">
-                <div className="bg-gray-800 rounded-lg p-4 text-center">
-                  <p className="text-3xl font-bold text-red-400">12</p>
-                  <p className="text-sm text-gray-400 mt-1">High Severity</p>
+              {marketsData?.alertStats ? (
+                <div className="mt-8 grid grid-cols-1 md:grid-cols-4 gap-4">
+                  <div className="bg-gray-800 rounded-lg p-4 text-center">
+                    <p className="text-3xl font-bold text-red-400">{marketsData.alertStats.highSeverity || 0}</p>
+                    <p className="text-sm text-gray-400 mt-1">High Severity</p>
+                  </div>
+                  <div className="bg-gray-800 rounded-lg p-4 text-center">
+                    <p className="text-3xl font-bold text-yellow-400">{marketsData.alertStats.mediumSeverity || 0}</p>
+                    <p className="text-sm text-gray-400 mt-1">Medium Severity</p>
+                  </div>
+                  <div className="bg-gray-800 rounded-lg p-4 text-center">
+                    <p className="text-3xl font-bold text-green-400">{marketsData.alertStats.lowSeverity || 0}</p>
+                    <p className="text-sm text-gray-400 mt-1">Low Severity</p>
+                  </div>
+                  <div className="bg-gray-800 rounded-lg p-4 text-center">
+                    <p className="text-3xl font-bold text-purple-400">{marketsData.alertStats.potentialAlpha ? formatCurrency(marketsData.alertStats.potentialAlpha) : ''}</p>
+                    <p className="text-sm text-gray-400 mt-1">Potential Alpha</p>
+                  </div>
                 </div>
-                <div className="bg-gray-800 rounded-lg p-4 text-center">
-                  <p className="text-3xl font-bold text-yellow-400">28</p>
-                  <p className="text-sm text-gray-400 mt-1">Medium Severity</p>
+              ) : (
+                <div className="mt-8 text-center py-8 text-gray-500">
+                  <p>No alert statistics available</p>
                 </div>
-                <div className="bg-gray-800 rounded-lg p-4 text-center">
-                  <p className="text-3xl font-bold text-green-400">45</p>
-                  <p className="text-sm text-gray-400 mt-1">Low Severity</p>
-                </div>
-                <div className="bg-gray-800 rounded-lg p-4 text-center">
-                  <p className="text-3xl font-bold text-purple-400">$2.3M</p>
-                  <p className="text-sm text-gray-400 mt-1">Potential Alpha</p>
-                </div>
-              </div>
+              )}
             </div>
           </div>
         )}
@@ -456,19 +551,19 @@ const Dashboard = () => {
       <div className="mt-8 grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="bg-gray-900 rounded-lg p-4 border border-gray-800">
           <p className="text-gray-400 text-sm mb-1">Active Markets</p>
-          <p className="text-2xl font-bold">{globalData?.global?.numOpenConditions || '9,805'}</p>
+          <p className="text-2xl font-bold">{globalData?.global?.numOpenConditions}</p>
         </div>
         <div className="bg-gray-900 rounded-lg p-4 border border-gray-800">
           <p className="text-gray-400 text-sm mb-1">Total Traders</p>
-          <p className="text-2xl font-bold">{globalData?.global?.numTraders ? (parseInt(globalData.global.numTraders) / 1000000).toFixed(2) + 'M' : '1.14M'}</p>
+          <p className="text-2xl font-bold">{globalData?.global?.numTraders ? (parseInt(globalData.global.numTraders) / 1000000).toFixed(2) + 'M' : ''}</p>
         </div>
         <div className="bg-gray-900 rounded-lg p-4 border border-gray-800">
           <p className="text-gray-400 text-sm mb-1">24h Volume</p>
-          <p className="text-2xl font-bold">$124.5M</p>
+          <p className="text-2xl font-bold">{globalData?.global?.volume24h ? formatCurrency(globalData.global.volume24h) : ''}</p>
         </div>
         <div className="bg-gray-900 rounded-lg p-4 border border-gray-800">
           <p className="text-gray-400 text-sm mb-1">Resolved Markets</p>
-          <p className="text-2xl font-bold">{globalData?.global?.numClosedConditions || '48,624'}</p>
+          <p className="text-2xl font-bold">{globalData?.global?.numClosedConditions}</p>
         </div>
       </div>
     </div>
