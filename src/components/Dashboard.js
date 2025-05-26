@@ -1,25 +1,18 @@
 import React, { useState } from 'react';
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis } from 'recharts';
 import { TrendingUp, Activity, DollarSign, Brain, AlertTriangle, Zap, Target, Eye } from 'lucide-react';
-import { useQuery } from '@apollo/client';
-import { GET_GLOBAL_STATS, GET_TOP_TRADERS, GET_RECENT_TRADES } from '../queries/polymarketQueries';
 
 const Dashboard = () => {
   const [activeTab, setActiveTab] = useState('smartMoney');
   const [selectedTimeframe, setSelectedTimeframe] = useState('24h');
-  
-  // GraphQL queries
-  const { loading: globalLoading, error: globalError, data: globalData } = useQuery(GET_GLOBAL_STATS);
-  const { loading: tradersLoading, error: tradersError, data: tradersData } = useQuery(GET_TOP_TRADERS);
-  const { loading: tradesLoading, error: tradesError, data: tradesData } = useQuery(GET_RECENT_TRADES);
 
-  // Simulated data - will be replaced with real data from queries
-  const smartMoneyData = tradersData?.accounts || [
-    { id: '0x4bfb...982e', scaledCollateralVolume: 2145821969, scaledProfit: 45300000, numTrades: 342 },
-    { id: '0xc5d5...f80a', scaledCollateralVolume: 5394853900, scaledProfit: 123000000, numTrades: 521 },
-    { id: '0xd218...b5c9', scaledCollateralVolume: 174758983, scaledProfit: -13797330, numTrades: 89 },
-    { id: '0x5bff...ffbe', scaledCollateralVolume: 158016200, scaledProfit: -6335658, numTrades: 134 },
-    { id: '0x9d84...1344', scaledCollateralVolume: 135540546, scaledProfit: -6616914, numTrades: 201 }
+  // Demo data for the dashboard
+  const smartMoneyData = [
+    { id: '0x4bfb41d5b3570defd03c39a9a4d8de6bd8b8982e', scaledCollateralVolume: 2145821969, scaledProfit: 45300000, numTrades: 342, winRate: 73 },
+    { id: '0xc5d563a36ae78145c45a50134d48a1215220f80a', scaledCollateralVolume: 5394853900, scaledProfit: 123000000, numTrades: 521, winRate: 68 },
+    { id: '0xd218e474776403a330142299f7796e8ba32eb5c9', scaledCollateralVolume: 174758983, scaledProfit: -13797330, numTrades: 89, winRate: 42 },
+    { id: '0x5bffcf561bcae83af680ad600cb99f1184d6ffbe', scaledCollateralVolume: 158016200, scaledProfit: -6335658, numTrades: 134, winRate: 38 },
+    { id: '0x9d84ce0306f8551e02efef1680475fc0f1dc1344', scaledCollateralVolume: 135540546, scaledProfit: -6616914, numTrades: 201, winRate: 45 }
   ];
 
   const orderFlowData = [
@@ -46,18 +39,11 @@ const Dashboard = () => {
     { id: 4, type: 'momentum', market: 'AI Regulation', opportunity: 'Momentum divergence', value: '15 min', severity: 'high' }
   ];
 
-  const whaleActivity = tradesData?.transactions?.slice(0, 4).map(tx => ({
-    timestamp: new Date(parseInt(tx.timestamp) * 1000).toLocaleString(),
-    address: tx.user?.id || '0x0000...0000',
-    action: tx.type || 'UNKNOWN',
-    market: 'Market #' + (tx.outcomeIndex || '0'),
-    size: parseInt(tx.tradeAmount || '0'),
-    price: 0.5 + Math.random() * 0.3
-  })) || [
-    { timestamp: '2024-01-25 14:32', address: '0x4bfb...982e', action: 'Buy', market: 'Presidential Election', size: 1200000, price: 0.62 },
-    { timestamp: '2024-01-25 14:28', address: '0xc5d5...f80a', action: 'Sell', market: 'Fed Rate Decision', size: 800000, price: 0.71 },
-    { timestamp: '2024-01-25 14:15', address: '0x9d84...1344', action: 'Buy', market: 'Bitcoin Price EOY', size: 500000, price: 0.44 },
-    { timestamp: '2024-01-25 13:58', address: '0xd218...b5c9', action: 'Sell', market: 'AI Regulation', size: 350000, price: 0.58 }
+  const whaleActivity = [
+    { timestamp: '2024-01-25 14:32', address: '0x4bfb...982e', action: 'BUY', market: 'Presidential Election', size: 1200000, price: 0.62 },
+    { timestamp: '2024-01-25 14:28', address: '0xc5d5...f80a', action: 'SELL', market: 'Fed Rate Decision', size: 800000, price: 0.71 },
+    { timestamp: '2024-01-25 14:15', address: '0x9d84...1344', action: 'BUY', market: 'Bitcoin Price EOY', size: 500000, price: 0.44 },
+    { timestamp: '2024-01-25 13:58', address: '0xd218...b5c9', action: 'SELL', market: 'AI Regulation', size: 350000, price: 0.58 }
   ];
 
   const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#6366f1'];
@@ -77,25 +63,6 @@ const Dashboard = () => {
     if (!address) return '';
     return `${address.slice(0, 6)}...${address.slice(-4)}`;
   };
-
-  const calculateWinRate = (profit, trades) => {
-    // Simulated win rate calculation
-    if (!trades || trades === 0) return 0;
-    const baseRate = 50;
-    const profitFactor = parseFloat(profit) > 0 ? 20 : -20;
-    return Math.max(0, Math.min(100, baseRate + profitFactor + Math.random() * 10));
-  };
-
-  if (globalLoading || tradersLoading || tradesLoading) {
-    return (
-      <div className="min-h-screen bg-gray-950 text-gray-100 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
-          <p className="text-gray-400">Loading Polymarket data...</p>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen bg-gray-950 text-gray-100 p-4">
@@ -155,44 +122,41 @@ const Dashboard = () => {
                 Top Smart Money Addresses
               </h2>
               <div className="space-y-4">
-                {smartMoneyData.map((trader, index) => {
-                  const winRate = calculateWinRate(trader.scaledProfit, trader.numTrades);
-                  return (
-                    <div key={index} className="bg-gray-800 rounded-lg p-4 hover:bg-gray-750 transition-colors cursor-pointer">
-                      <div className="flex justify-between items-start mb-2">
-                        <div>
-                          <p className="font-mono text-sm text-blue-400">{formatAddress(trader.id)}</p>
-                          <p className="text-xs text-gray-500 mt-1">{trader.numTrades} trades</p>
-                        </div>
-                        <div className="text-right">
-                          <p className={`text-lg font-semibold ${parseFloat(trader.scaledProfit) > 0 ? 'text-green-400' : 'text-red-400'}`}>
-                            {formatCurrency(trader.scaledProfit)}
-                          </p>
-                          <p className="text-xs text-gray-500">P&L</p>
-                        </div>
+                {smartMoneyData.map((trader, index) => (
+                  <div key={index} className="bg-gray-800 rounded-lg p-4 hover:bg-gray-750 transition-colors cursor-pointer">
+                    <div className="flex justify-between items-start mb-2">
+                      <div>
+                        <p className="font-mono text-sm text-blue-400">{formatAddress(trader.id)}</p>
+                        <p className="text-xs text-gray-500 mt-1">{trader.numTrades} trades</p>
                       </div>
-                      <div className="grid grid-cols-3 gap-4 mt-3">
-                        <div>
-                          <p className="text-xs text-gray-500">Volume</p>
-                          <p className="text-sm font-medium">{formatCurrency(trader.scaledCollateralVolume)}</p>
-                        </div>
-                        <div>
-                          <p className="text-xs text-gray-500">Win Rate</p>
-                          <p className={`text-sm font-medium ${winRate > 50 ? 'text-green-400' : 'text-red-400'}`}>
-                            {winRate.toFixed(0)}%
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-xs text-gray-500">Status</p>
-                          <p className="text-sm font-medium text-yellow-400 flex items-center">
-                            <Activity className="w-3 h-3 mr-1" />
-                            Active
-                          </p>
-                        </div>
+                      <div className="text-right">
+                        <p className={`text-lg font-semibold ${trader.scaledProfit > 0 ? 'text-green-400' : 'text-red-400'}`}>
+                          {formatCurrency(trader.scaledProfit)}
+                        </p>
+                        <p className="text-xs text-gray-500">P&L</p>
                       </div>
                     </div>
-                  );
-                })}
+                    <div className="grid grid-cols-3 gap-4 mt-3">
+                      <div>
+                        <p className="text-xs text-gray-500">Volume</p>
+                        <p className="text-sm font-medium">{formatCurrency(trader.scaledCollateralVolume)}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-500">Win Rate</p>
+                        <p className={`text-sm font-medium ${trader.winRate > 50 ? 'text-green-400' : 'text-red-400'}`}>
+                          {trader.winRate}%
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-500">Status</p>
+                        <p className="text-sm font-medium text-yellow-400 flex items-center">
+                          <Activity className="w-3 h-3 mr-1" />
+                          Active
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
 
@@ -205,15 +169,15 @@ const Dashboard = () => {
                 {whaleActivity.map((activity, index) => (
                   <div key={index} className="bg-gray-800 rounded-lg p-3 text-sm">
                     <div className="flex justify-between items-start mb-1">
-                      <p className={`font-semibold ${activity.action === 'Buy' ? 'text-green-400' : 'text-red-400'}`}>
-                        {activity.action.toUpperCase()}
+                      <p className={`font-semibold ${activity.action === 'BUY' ? 'text-green-400' : 'text-red-400'}`}>
+                        {activity.action}
                       </p>
                       <p className="text-gray-400 text-xs">{activity.timestamp}</p>
                     </div>
                     <p className="text-gray-300 text-xs mb-1">{activity.market}</p>
                     <div className="flex justify-between">
                       <p className="text-gray-400">{formatCurrency(activity.size)}</p>
-                      <p className="text-gray-400">@ {activity.price.toFixed(2)}</p>
+                      <p className="text-gray-400">@ {activity.price}</p>
                     </div>
                   </div>
                 ))}
@@ -473,19 +437,19 @@ const Dashboard = () => {
       <div className="mt-8 grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="bg-gray-900 rounded-lg p-4 border border-gray-800">
           <p className="text-gray-400 text-sm mb-1">Active Markets</p>
-          <p className="text-2xl font-bold">{globalData?.global?.numOpenConditions || '9,805'}</p>
+          <p className="text-2xl font-bold">9,805</p>
         </div>
         <div className="bg-gray-900 rounded-lg p-4 border border-gray-800">
           <p className="text-gray-400 text-sm mb-1">Total Traders</p>
-          <p className="text-2xl font-bold">{globalData?.global?.numTraders ? (parseInt(globalData.global.numTraders) / 1000000).toFixed(2) + 'M' : '1.14M'}</p>
+          <p className="text-2xl font-bold">1.14M</p>
         </div>
         <div className="bg-gray-900 rounded-lg p-4 border border-gray-800">
-          <p className="text-gray-400 text-sm mb-1">Total Volume</p>
-          <p className="text-2xl font-bold">{globalData?.global?.scaledCollateralVolume ? formatCurrency(globalData.global.scaledCollateralVolume) : '$124.5M'}</p>
+          <p className="text-gray-400 text-sm mb-1">24h Volume</p>
+          <p className="text-2xl font-bold">$124.5M</p>
         </div>
         <div className="bg-gray-900 rounded-lg p-4 border border-gray-800">
           <p className="text-gray-400 text-sm mb-1">Resolved Markets</p>
-          <p className="text-2xl font-bold">{globalData?.global?.numClosedConditions || '48,624'}</p>
+          <p className="text-2xl font-bold">48,624</p>
         </div>
       </div>
     </div>
