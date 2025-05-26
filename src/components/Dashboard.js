@@ -175,12 +175,52 @@ const Dashboard = () => {
     return address; // Show full wallet address
   };
 
+  // Check for errors
+  const hasErrors = globalError || tradersError || tradesError || orderFlowError || marketsError || whaleError;
+  
+  // Show loading state
   if (globalLoading || tradersLoading || tradesLoading) {
     return (
       <div className="min-h-screen bg-gray-950 text-gray-100 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
           <p className="text-gray-400">Loading Polymarket data...</p>
+        </div>
+      </div>
+    );
+  }
+  
+  // Show error state
+  if (hasErrors) {
+    console.error("GraphQL Errors:", { 
+      globalError, tradersError, tradesError, orderFlowError, marketsError, whaleError 
+    });
+    
+    return (
+      <div className="min-h-screen bg-gray-950 text-gray-100 flex items-center justify-center">
+        <div className="text-center max-w-lg">
+          <div className="text-red-500 text-5xl mb-4">⚠️</div>
+          <h2 className="text-xl font-bold mb-4">Data Loading Error</h2>
+          <p className="text-gray-400 mb-4">
+            We're having trouble connecting to the Polymarket data API. This could be due to network issues or API rate limits.
+          </p>
+          <p className="text-gray-500 text-sm">
+            Check the browser console for detailed error information.
+          </p>
+          <button 
+            onClick={() => {
+              // Refetch all queries
+              refetchGlobal();
+              refetchTraders();
+              refetchTrades();
+              if (activeTab === 'orderFlow') refetchOrderFlow();
+              if (activeTab === 'heatmap') refetchMarkets();
+              if (activeTab === 'smartMoney') refetchWhale();
+            }}
+            className="mt-6 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-md transition-colors"
+          >
+            Try Again
+          </button>
         </div>
       </div>
     );
