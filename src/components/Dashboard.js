@@ -149,8 +149,8 @@ const Dashboard = () => {
   const processedWhaleActivity = tradesData?.enrichedOrderFilleds ? 
     tradesData.enrichedOrderFilleds.map(trade => ({
       timestamp: formatTimestamp(trade.timestamp),
-      maker: trade.maker,
-      taker: trade.taker,
+      maker: trade.maker?.id,
+      taker: trade.taker?.id,
       side: trade.side,
       market: trade.market,
       size: trade.size ? parseInt(trade.size) : null,
