@@ -10,7 +10,6 @@ export const GET_GLOBAL_STATS = gql`
       tradesQuantity
       scaledCollateralVolume
       scaledCollateralFees
-      volume24h
     }
   }
 `;
@@ -30,33 +29,27 @@ export const GET_TOP_TRADERS = gql`
 
 export const GET_RECENT_TRADES = gql`
   query GetRecentTrades {
-    enrichedOrderFilleds(first: 20, orderBy: timestamp, orderDirection: desc) {
+    transactions(first: 20, orderBy: timestamp, orderDirection: desc) {
       id
       timestamp
-      maker {
-        id
-      }
-      taker {
+      type
+      user {
         id
       }
       market {
         id
       }
-      side
-      size
-      price
+      tradeAmount
+      outcomeTokensAmount
+      outcomeIndex
     }
   }
 `;
 
 export const GET_MARKET_CONDITIONS = gql`
   query GetMarketConditions {
-    markets: conditions(first: 10, where: {resolutionTimestamp: null}) {
+    conditions(first: 10, where: {resolutionTimestamp: null}) {
       id
-      name
-      volume: scaledCollateralVolume
-      change24h
-      activity
       outcomeSlotCount
       fixedProductMarketMakers {
         id
@@ -65,20 +58,6 @@ export const GET_MARKET_CONDITIONS = gql`
         lastActiveDay
         tradesQuantity
       }
-    }
-    alerts {
-      id
-      type
-      market
-      opportunity
-      value
-      severity
-    }
-    alertStats {
-      highSeverity
-      mediumSeverity
-      lowSeverity
-      potentialAlpha
     }
   }
 `;
@@ -100,14 +79,6 @@ export const GET_ORDER_FLOW = gql`
         id
       }
     }
-    metrics {
-      buyVolume
-      sellVolume
-      buyVolumeChange
-      sellVolumeChange
-      buySellRatio
-      largeOrderPercentage
-    }
   }
 `;
 
@@ -124,7 +95,6 @@ export const GET_WHALE_ACTIVITY = gql`
       timestamp
       market {
         id
-        conditions
       }
       user {
         id
