@@ -21,33 +21,55 @@ const Dashboard = () => {
   };
   
   // GraphQL queries with error handling
-  const { loading: globalLoading, data: globalData, refetch: refetchGlobal } = 
-    useQuery(GET_GLOBAL_STATS, { notifyOnNetworkStatusChange: true });
+  const { loading: globalLoading, error: globalError, data: globalData, refetch: refetchGlobal } = 
+    useQuery(GET_GLOBAL_STATS, { 
+      notifyOnNetworkStatusChange: true,
+      onError: (error) => console.error("Global stats query error:", error)
+    });
     
-  const { loading: tradersLoading, data: tradersData, refetch: refetchTraders } = 
-    useQuery(GET_TOP_TRADERS, { notifyOnNetworkStatusChange: true });
+  const { loading: tradersLoading, error: tradersError, data: tradersData, refetch: refetchTraders } = 
+    useQuery(GET_TOP_TRADERS, { 
+      notifyOnNetworkStatusChange: true,
+      onError: (error) => console.error("Top traders query error:", error)
+    });
     
-  const { loading: tradesLoading, data: tradesData, refetch: refetchTrades } = 
-    useQuery(GET_RECENT_TRADES, { notifyOnNetworkStatusChange: true });
+  const { loading: tradesLoading, error: tradesError, data: tradesData, refetch: refetchTrades } = 
+    useQuery(GET_RECENT_TRADES, { 
+      notifyOnNetworkStatusChange: true,
+      onError: (error) => console.error("Recent trades query error:", error)
+    });
     
-  const { data: orderFlowData, refetch: refetchOrderFlow } = 
+  const { loading: orderFlowLoading, error: orderFlowError, data: orderFlowData, refetch: refetchOrderFlow } = 
     useQuery(GET_ORDER_FLOW, { 
       variables: { timestamp: getTimestampForTimeframe().toString() },
       notifyOnNetworkStatusChange: true,
-      skip: activeTab !== 'orderFlow'
+      skip: activeTab !== 'orderFlow',
+      onError: (error) => console.error("Order flow query error:", error)
     });
     
-  const { data: marketsData, refetch: refetchMarkets } = 
+  const { loading: marketsLoading, error: marketsError, data: marketsData, refetch: refetchMarkets } = 
     useQuery(GET_MARKET_CONDITIONS, { 
       notifyOnNetworkStatusChange: true,
-      skip: activeTab !== 'heatmap'
+      skip: activeTab !== 'heatmap',
+      onError: (error) => console.error("Market conditions query error:", error)
     });
     
-  const { data: whaleData, refetch: refetchWhale } = 
+  const { loading: whaleLoading, error: whaleError, data: whaleData, refetch: refetchWhale } = 
     useQuery(GET_WHALE_ACTIVITY, { 
       notifyOnNetworkStatusChange: true,
-      skip: activeTab !== 'smartMoney'
+      skip: activeTab !== 'smartMoney',
+      onError: (error) => console.error("Whale activity query error:", error)
     });
+
+  // Log data for debugging
+  useEffect(() => {
+    console.log("Global data:", globalData);
+    console.log("Traders data:", tradersData);
+    console.log("Trades data:", tradesData);
+    console.log("Order flow data:", orderFlowData);
+    console.log("Markets data:", marketsData);
+    console.log("Whale data:", whaleData);
+  }, [globalData, tradersData, tradesData, orderFlowData, marketsData, whaleData]);
   
   
   // Refresh data when timeframe changes
